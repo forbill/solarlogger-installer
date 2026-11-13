@@ -3,9 +3,12 @@
 set -Eeuo pipefail
 umask 077
 die(){ echo "ERROR: $*" >&2; exit 1; }
-usage(){ echo 'Usage: sudo bash install.sh --ip <SERVER_IP> [--email ops@example.com]'; echo '   or: sudo bash install.sh --domain mqtt.example.com --email ops@example.com'; echo '   or: sudo bash install.sh --host <SERVER_IP> --cert /path/fullchain.pem --key /path/privkey.pem'; }
+usage(){ echo 'Add --guided for stage-by-stage terminal pauses.'; echo 'Usage: sudo bash install.sh --ip <SERVER_IP> [--email ops@example.com]'; echo '   or: sudo bash install.sh --domain mqtt.example.com --email ops@example.com'; echo '   or: sudo bash install.sh --host <SERVER_IP> --cert /path/fullchain.pem --key /path/privkey.pem'; }
 HOST='' DOMAIN='' IP='' EMAIL='' CERT='' KEY=''
+GUIDED=0
+checkpoint(){ if (( GUIDED )); then printf '\n[PAUSE] %s\n' "$1"; read -r -p 'Press ENTER to continue: ' </dev/tty; fi; }
 while (( $# )); do
+  if [[ "$1" == '--guided' ]]; then GUIDED=1; shift; continue; fi
   (( $# >= 2 )) || { usage; exit 2; }
   case "$1" in
     --host) HOST=$2;; --domain) DOMAIN=$2;; --ip) IP=$2;; --email) EMAIL=$2;;
@@ -34,9 +37,11 @@ fi
 if grep -RhEq '^[[:space:]]*(listener|password_file|acl_file|plugin)[[:space:]]+' /etc/mosquitto/mosquitto.conf /etc/mosquitto/conf.d 2>/dev/null; then
   die 'Existing broker listeners/auth; use migration runbook, not fresh install'
 fi
+checkpoint 'Preflight passed. Next: OS packages; no MQTT credentials yet.'
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y mosquitto mosquitto-clients python3-paho-mqtt apparmor-utils openssl ca-certificates expect git curl
+checkpoint 'OS packages installed. Next: obtain TLS certificate via ACME.'
 if [[ -n "$IP" ]]; then
   # Short-lived IP certificates (~6 days): standalone HTTP-01 needs inbound TCP/80.
   # acme.sh uses cron for renewals, and install-cert's reloadcmd redeploys to Mosquitto.
@@ -76,6 +81,7 @@ if [[ -n "$DOMAIN" ]]; then
   KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
 fi
 [[ -r "$CERT" && -r "$KEY" ]] || die 'TLS files unreadable'
+checkpoint 'TLS certificate obtained. Next: initialize Mosquitto, AppArmor and DynSec.'
 PLUGIN=$(find /usr/lib -type f -name mosquitto_dynamic_security.so -print -quit)
 [[ -n "$PLUGIN" ]] || die 'DynSec plugin missing'
 
@@ -167,6 +173,7 @@ EOF
 chmod 644 /etc/mosquitto/conf.d/solarlogger.conf
 systemctl enable --now mosquitto
 systemctl is-active --quiet mosquitto || die 'Broker did not start: journalctl -u mosquitto'
+checkpoint 'Mosquitto TLS listener started. Next: create randomized service accounts.'
 # Bootstrap accounts using broker API via loopback; no plaintext passwords in command arguments.
 python3 - <<'PY'
 import json, os, queue, secrets, threading
@@ -275,6 +282,7 @@ ACME_MANAGER
   chmod 700 /usr/local/sbin/solarlogger-acme
   systemctl enable --now certbot.timer || true
 fi
+checkpoint 'Provisioning finished and TLS checked. Next: display sensitive credentials on your terminal. Do not share screenshots.'
 printf '\n'
 printf '%s\n' '==========================================================='
 printf '%s\n' '        SOLARLOGGER MQTT — INSTALLATION COMPLETE'
