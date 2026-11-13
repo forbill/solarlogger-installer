@@ -2,7 +2,7 @@
 
 Public standalone installer for a NEW Ubuntu/Debian VPS, using Mosquitto with Dynamic Security and TLS.
 
-**Experimental:** Shell syntax checked, but a full end-to-end test on Ubuntu has not yet been completed. Use a disposable VPS first.
+**Status (2026-11-13):** Guided first installation tested on Ubuntu 26.04.1 LTS (x86_64), Mosquitto 2.0.22. ACME IP certificate issuance, verified TLS connection, broker startup, DynSec account generation, role separation, and secret file permissions passed. **Automated ACME renewal, reboot recovery, and a second-install refusal test are not yet verified.**
 
 ## Install on a new server
 
@@ -12,10 +12,10 @@ Download, inspect and run (replace placeholders with your own values):
 curl -fsSL https://raw.githubusercontent.com/forbill/solarlogger-installer/main/install.sh -o install.sh
 less install.sh
 bash -n install.sh
-sudo bash install.sh --ip <SERVER_IP>
+sudo bash install.sh --guided --ip <SERVER_IP>
 ~~~
 
-This option obtains a short-lived ACME IP certificate. Inbound TCP/80 is required for certificate validation/renewal, TCP/8883 for encrypted MQTT. TCP/1883 binds to loopback only.
+The `--guided` flag pauses at each installation stage for review. This option obtains a short-lived ACME IP certificate. Inbound TCP/80 is required for certificate validation/renewal, TCP/8883 for encrypted MQTT. TCP/1883 binds to loopback only.
 
 Alternatively, use a domain or supply an already issued trusted certificate:
 
@@ -41,3 +41,8 @@ Then configure the private Laravel Cloud environment and run php artisan mqtt:dy
 ## Scope
 
 New server only: refuses existing SolarLogger broker configuration or Dynamic Security database; does not migrate an old installation. This public repository contains no Cloud source code, actual server addresses, real user names or credentials.
+## Verified installation checks
+
+On the first Ubuntu 26.04.1 test, the broker passed TLS verification against its IP certificate, the telemetry service account could subscribe to permitted topics and was denied access to the administrative Dynamic Security channel. The independent provisioning account could subscribe to its authorized control-response channel. The generated secrets file was owned by root with permissions `0600`.
+
+The service account login names and passwords are generated at runtime, and **must not be recorded in this public repository**. The admin password is not for use by Laravel Cloud. After deploying, verify automatic certificate renewal, then rotate any bootstrap SSH passwords that have been shared outside a secret manager.
