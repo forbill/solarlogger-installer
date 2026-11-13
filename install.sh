@@ -212,8 +212,9 @@ try:
     c.subscribe('$CONTROL/dynamic-security/v1/response',qos=1)
     if not subscribed.wait(10): raise RuntimeError('Admin subscription failed')
     base='solarlogger/v1/devices/+/'
-    w=[{'acltype':'subscribeLiteral','topic':base+suffix,'allow':True,'priority':10}
-       for suffix in ('telemetry','state','events','ack')]
+    w=[{'acltype':kind,'topic':base+suffix,'allow':True,'priority':10}
+       for suffix in ('telemetry','state','events','ack')
+       for kind in ('subscribeLiteral','publishClientReceive')]
     w.append({'acltype':'publishClientSend','topic':base+'cmd','allow':True,'priority':10})
     p=[{'acltype':kind,'topic':topic,'allow':True,'priority':10} for kind,topic in (
         ('publishClientSend','$CONTROL/dynamic-security/v1'),
