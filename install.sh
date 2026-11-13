@@ -17,6 +17,11 @@ while (( $# )); do
   esac
   shift 2
 done
+# Stop unsupported operating systems before root/TTY checks or package installation.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=platform-check.sh
+source "$SCRIPT_DIR/platform-check.sh"
+solarlogger_platform_check || die 'Platform preflight failed'
 (( EUID == 0 )) || die 'Run as root'
 [[ -t 0 ]] || die 'Interactive terminal required; do not pipe wget into bash'
 command -v apt-get >/dev/null || die 'Debian/Ubuntu with apt required'
